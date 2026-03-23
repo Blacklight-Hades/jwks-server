@@ -1,10 +1,11 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Header
 from db import init_db, get_valid_keys_from_db, get_expired_key_from_db
 from jwt_utils import public_key_to_jwk, issue_jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 import sqlite3
 import time
+import base64
 
 DB_FILE = "totally_not_my_privateKeys.db"
 
@@ -59,12 +60,12 @@ def jwks():
 
 
 @app.post("/auth")
-def auth(expired: bool = Query(False)):
-    """
-    Issue a signed JWT.
-    - If ?expired is present, sign with an expired key.
-    - Otherwise, sign with a valid (non-expired) key.
-    """
+def auth(
+    expired: bool = Query(False),
+    authorization: str = Header(default=None)
+):
+    # Accept HTTP Basic auth or JSON body - we don't actually validate,
+    # just need to accept and return a valid JWT
     if expired:
         result = get_expired_key_from_db(DB_FILE)
     else:
@@ -72,7 +73,7 @@ def auth(expired: bool = Query(False)):
         result = results[0] if results else None
 
     if result is None:
-        return {"error": "No suitable key found"}, 500
+        return {"error": "No suitable key found"}
 
     kid, private_key = result
     token = issue_jwt(private_key, str(kid), expired=expired)

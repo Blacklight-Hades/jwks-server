@@ -38,7 +38,8 @@ def setup_test_db():
 client = TestClient(main.app)
 
 
-# DB layer tests 
+# ── DB layer tests ────────────────────────────────────────────────────────────
+
 def test_init_db_creates_table():
     """init_db should create the keys table."""
     conn = sqlite3.connect(TEST_DB)
@@ -51,7 +52,7 @@ def test_init_db_creates_table():
 
 
 def test_generate_and_store_keys_inserts_rows():
-
+    """generate_and_store_keys should insert at least 2 rows (1 valid, 1 expired)."""
     conn = sqlite3.connect(TEST_DB)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM keys")
@@ -61,7 +62,7 @@ def test_generate_and_store_keys_inserts_rows():
 
 
 def test_get_valid_keys_returns_only_unexpired():
-
+    """get_valid_keys_from_db should only return keys where exp > now."""
     keys = db.get_valid_keys_from_db(TEST_DB)
     now = int(time.time())
     assert len(keys) >= 1
@@ -76,7 +77,7 @@ def test_get_valid_keys_returns_only_unexpired():
 
 
 def test_get_expired_key_returns_expired():
-
+    """get_expired_key_from_db should return a key where exp < now."""
     result = db.get_expired_key_from_db(TEST_DB)
     assert result is not None
     kid, _ = result
@@ -89,7 +90,7 @@ def test_get_expired_key_returns_expired():
 
 
 def test_get_expired_key_returns_none_when_no_expired_keys():
-
+    """get_expired_key_from_db should return None if no expired keys exist."""
     # Delete all expired keys
     conn = sqlite3.connect(TEST_DB)
     conn.execute("DELETE FROM keys WHERE exp < ?", (int(time.time()),))
@@ -100,7 +101,7 @@ def test_get_expired_key_returns_none_when_no_expired_keys():
     assert result is None
 
 
-#Endpoint tests
+# ── Endpoint tests ─────────────────────────────────────────────────────────────
 
 def test_jwks_endpoint_returns_keys():
     """GET /.well-known/jwks.json should return a list with at least one key."""
@@ -112,7 +113,7 @@ def test_jwks_endpoint_returns_keys():
 
 
 def test_jwks_key_has_required_fields():
-    
+    """Each JWK should contain the required RSA fields."""
     response = client.get("/.well-known/jwks.json")
     key = response.json()["keys"][0]
     for field in ("kty", "kid", "use", "alg", "n", "e"):
@@ -120,7 +121,7 @@ def test_jwks_key_has_required_fields():
 
 
 def test_jwks_only_returns_valid_keys():
-  
+    """JWKS endpoint should never return expired keys."""
     # Remove all valid keys so only expired ones remain
     conn = sqlite3.connect(TEST_DB)
     conn.execute("DELETE FROM keys WHERE exp > ?", (int(time.time()),))
@@ -133,21 +134,21 @@ def test_jwks_only_returns_valid_keys():
 
 
 def test_auth_returns_token():
-  
+    """POST /auth should return a JWT token."""
     response = client.post("/auth")
     assert response.status_code == 200
     assert "token" in response.json()
 
 
 def test_auth_expired_returns_token():
-
+    """POST /auth?expired=true should return a JWT token signed with an expired key."""
     response = client.post("/auth?expired=true")
     assert response.status_code == 200
     assert "token" in response.json()
 
 
 def test_auth_token_is_string():
-
+    """The token returned by POST /auth should be a non-empty string."""
     response = client.post("/auth")
     token = response.json()["token"]
     assert isinstance(token, str)
@@ -155,7 +156,7 @@ def test_auth_token_is_string():
 
 
 def test_auth_and_jwks_kid_match():
-
+    """The kid in the JWT header should match one of the kids in the JWKS."""
     import base64, json
 
     auth_response = client.post("/auth")
